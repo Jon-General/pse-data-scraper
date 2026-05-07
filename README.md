@@ -40,6 +40,8 @@ pse companies --refresh
 pse prices --symbols BDO,ALI --from 2020-01-01 --to 2024-01-01
 pse export --format csv
 pse status
+pse fx
+pse financials --from-date 01-01-2020
 ```
 
 Common options:
@@ -50,6 +52,12 @@ Common options:
 - `--refresh` forces re-downloads even if files exist.
 - `--no-cache` disables cached API responses.
 - Dates accept `MM-DD-YYYY` or `YYYY-MM-DD`.
+
+FX and financial normalization:
+
+- `pse fx` downloads BSP daily USD/PHP rates to `data/fx/usdphp.csv`.
+- `pse financials` auto-loads (or auto-downloads) BSP FX and normalizes output to
+    base PHP units by report date (with nearest prior BSP date fallback).
 
 Legacy commands (still supported): `scrape`, `download`, `combine`, `all`.
 
@@ -99,6 +107,8 @@ combine_csvs("data/history", "data/combined.csv")
 - `data/companies.csv` - company list with IDs and symbols
 - `data/history/` - one CSV per company
 - `data/combined.csv` - consolidated price dataset
+- `data/fx/usdphp.csv` - BSP daily USD/PHP reference rates
+- `data/financials.csv` - financial report fields normalized to base PHP units
 - `.cache/` - optional cached API responses
 
 ## API Notes

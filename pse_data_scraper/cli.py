@@ -15,7 +15,14 @@ from pse_data_scraper import __version__
 from pse_data_scraper.client import PSEClient
 from pse_data_scraper.config import DEFAULT_CONFIG_NAME, load_config, write_default_config
 from pse_data_scraper.downloader import download_historical_data
-from pse_data_scraper.pipeline import ensure_companies_csv, export_prices, sync_data
+from pse_data_scraper.pipeline import (
+    ensure_companies_csv,
+    export_prices,
+    fetch_financials,
+    fetch_fundamentals,
+    fetch_usdphp_fx,
+    sync_data,
+)
 from pse_data_scraper.status import collect_status
 
 
@@ -208,6 +215,67 @@ def handle_status(args) -> None:
     _print_status(status)
 
 
+def handle_index(args) -> None:
+    cfg = _resolve_config(args)
+    index_dir = getattr(args, "index_dir", None) or str(cfg.data_dir / "index")
+    fetch_index(
+        index_dir=index_dir,
+        start_date=cfg.start_date,
+        end_date=cfg.end_date,
+    )
+
+
+def handle_fundamentals(args) -> None:
+    cfg = _resolve_config(args)
+    client = PSEClient(rate_limit_seconds=cfg.rate_limit)
+    companies = ensure_companies_csv(
+        client=client,
+        companies_csv=str(cfg.companies_csv),
+        refresh=False,
+    )
+    fundamentals_csv = getattr(args, "fundamentals", None) or str(cfg.data_dir / "fundamentals.csv")
+    fetch_fundamentals(
+        client=client,
+        companies=companies,
+        fundamentals_csv=fundamentals_csv,
+        symbols=cfg.symbols or None,
+        max_companies=cfg.max_companies,
+    )
+
+
+def handle_financials(args) -> None:
+    cfg = _resolve_config(args)
+    client = PSEClient(rate_limit_seconds=cfg.rate_limit)
+    companies = ensure_companies_csv(
+        client=client,
+        companies_csv=str(cfg.companies_csv),
+        refresh=False,
+    )
+    financials_csv = getattr(args, "financials", None) or str(cfg.data_dir / "financials.csv")
+    fx_csv = getattr(args, "fx_csv", None) or str(cfg.data_dir / "fx" / "usdphp.csv")
+    if not Path(fx_csv).exists() and not getattr(args, "skip_fx", False):
+        logging.info("FX CSV not found. Downloading BSP USD/PHP rates first...")
+        fetch_usdphp_fx(client=client, output_csv=fx_csv)
+
+    fetch_financials(
+        client=client,
+        companies=companies,
+        financials_csv=financials_csv,
+        symbols=cfg.symbols or None,
+        max_companies=cfg.max_companies,
+        from_date=getattr(args, "from_date", None) or "01-01-2010",
+        fx_csv=fx_csv,
+    )
+
+
+def handle_fx(args) -> None:
+    cfg = _resolve_config(args)
+    client = PSEClient(rate_limit_seconds=cfg.rate_limit)
+    output_csv = getattr(args, "output", None) or str(cfg.data_dir / "fx" / "usdphp.csv")
+    workbook = getattr(args, "workbook", None)
+    fetch_usdphp_fx(client=client, output_csv=output_csv, workbook_path=workbook)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="pse", description="PSE EDGE data scraper")
     parser.add_argument("--version", action="version", version=f"pse {__version__}")
@@ -299,6 +367,51 @@ def build_parser() -> argparse.ArgumentParser:
     status_parser.add_argument("--history-dir", help="History data directory")
     status_parser.add_argument("--combined", help="Combined CSV path")
     status_parser.set_defaults(func=handle_status)
+
+    fundamentals_parser = subparsers.add_parser(
+        "fundamentals", help="Scrape outstanding/listed shares for each company"
+    )
+    fundamentals_parser.add_argument("--data-dir", help="Root data directory")
+    fundamentals_parser.add_argument("--companies", "--input", dest="companies", help="Companies CSV path")
+    fundamentals_parser.add_argument("--output", dest="fundamentals", help="Output fundamentals CSV path")
+    fundamentals_parser.add_argument("--rate-limit", type=float, help="Seconds between requests")
+    fundamentals_parser.add_argument("--symbols", help="Comma-separated stock symbols")
+    fundamentals_parser.add_argument("--max-companies", type=int, help="Limit number of companies")
+    fundamentals_parser.set_defaults(func=handle_fundamentals)
+
+    financials_parser = subparsers.add_parser(
+        "financials", help="Scrape financial-report metrics for value/growth sorting"
+    )
+    financials_parser.add_argument("--data-dir", help="Root data directory")
+    financials_parser.add_argument("--companies", "--input", dest="companies", help="Companies CSV path")
+    financials_parser.add_argument("--output", dest="financials", help="Output financials CSV path")
+    financials_parser.add_argument("--rate-limit", type=float, help="Seconds between requests")
+    financials_parser.add_argument("--symbols", help="Comma-separated stock symbols")
+    financials_parser.add_argument("--max-companies", type=int, help="Limit number of companies")
+    financials_parser.add_argument(
+        "--from-date",
+        dest="from_date",
+        default="01-01-2010",
+        help="Earliest report date to search (MM-DD-YYYY)",
+    )
+    financials_parser.add_argument(
+        "--fx-csv",
+        dest="fx_csv",
+        help="BSP USD/PHP CSV path used to normalize financials to PHP",
+    )
+    financials_parser.add_argument(
+        "--skip-fx",
+        action="store_true",
+        help="Do not auto-download BSP FX CSV when missing",
+    )
+    financials_parser.set_defaults(func=handle_financials)
+
+    fx_parser = subparsers.add_parser("fx", help="Download BSP USD/PHP daily FX rates")
+    fx_parser.add_argument("--data-dir", help="Root data directory")
+    fx_parser.add_argument("--output", help="Output FX CSV path")
+    fx_parser.add_argument("--workbook", help="Optional local/output workbook path (.xlsx)")
+    fx_parser.add_argument("--rate-limit", type=float, help="Seconds between requests")
+    fx_parser.set_defaults(func=handle_fx)
 
     scrape_parser = subparsers.add_parser(
         "scrape", help="Deprecated. Use `pse companies` instead."

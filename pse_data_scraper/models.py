@@ -46,3 +46,24 @@ class HistoricalPrice:
             )
         except (KeyError, ValueError):
             return None
+
+
+@dataclass(frozen=True)
+class CompanyFundamentals:
+    company_id: str
+    stock_symbol: str
+    company_name: str
+    outstanding_shares: Optional[int]
+    listed_shares: Optional[int]
+
+
+@dataclass(frozen=True)
+class CompanyFinancials:
+    company_id: str
+    stock_symbol: str
+    company_name: str
+    edge_no: str
+    period_ended: Optional[str]
+    currency: Optional[str]
+    stockholders_equity: Optional[float]
+    book_value_per_share: Optional[float]

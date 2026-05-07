@@ -12,6 +12,9 @@ from typing import List, Optional, Sequence
 from pse_data_scraper.client import PSEClient
 from pse_data_scraper.combiner import combine_csvs
 from pse_data_scraper.downloader import download_historical_data
+from pse_data_scraper.financials import download_financials
+from pse_data_scraper.fx import download_usdphp_fx_csv
+from pse_data_scraper.fundamentals import download_fundamentals
 from pse_data_scraper.models import Company
 from pse_data_scraper.scraper import (
     load_companies_from_csv,
@@ -67,6 +70,63 @@ def download_prices(
 
 def export_prices(history_dir: str = "data/history", combined_csv: str = "data/combined.csv") -> None:
     combine_csvs(history_dir, combined_csv)
+
+
+def fetch_fundamentals(
+    client: PSEClient,
+    companies: Optional[Sequence[Company]] = None,
+    companies_csv: Optional[str] = None,
+    fundamentals_csv: str = "data/fundamentals.csv",
+    symbols: Optional[Sequence[str]] = None,
+    max_companies: Optional[int] = None,
+) -> Path:
+    """Scrape outstanding/listed shares for all (or selected) companies."""
+    return download_fundamentals(
+        client=client,
+        input_csv=companies_csv,
+        companies=companies,
+        output_path=fundamentals_csv,
+        symbols=symbols,
+        max_companies=max_companies,
+    )
+
+
+def fetch_financials(
+    client: PSEClient,
+    companies: Optional[Sequence[Company]] = None,
+    companies_csv: Optional[str] = None,
+    financials_csv: str = "data/financials.csv",
+    symbols: Optional[Sequence[str]] = None,
+    max_companies: Optional[int] = None,
+    from_date: str = "01-01-2010",
+    to_date: Optional[str] = None,
+    fx_csv: Optional[str] = None,
+) -> Path:
+    """Scrape book-equity fields from financial report disclosures."""
+    return download_financials(
+        client=client,
+        input_csv=companies_csv,
+        companies=companies,
+        output_path=financials_csv,
+        symbols=symbols,
+        max_companies=max_companies,
+        from_date=from_date,
+        to_date=to_date,
+        fx_csv=fx_csv,
+    )
+
+
+def fetch_usdphp_fx(
+    client: PSEClient,
+    output_csv: str = "data/fx/usdphp.csv",
+    workbook_path: Optional[str] = None,
+) -> Path:
+    """Download BSP USD/PHP daily rates and store as CSV."""
+    return download_usdphp_fx_csv(
+        client=client,
+        output_path=output_csv,
+        workbook_path=workbook_path,
+    )
 
 
 def sync_data(
